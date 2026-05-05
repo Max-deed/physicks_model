@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import math
+import numpy as np
 
 
 class Model:
@@ -109,11 +110,13 @@ class App:
         )
         self.reset_button.pack(side=tk.LEFT, padx=5)
 
-        self.fig, (self.energy_ax, self.work_ax) = plt.subplots(
+        self.fig, (self.motion_ax, self.energy_ax, self.work_ax) = plt.subplots(
             1,
-            2,
-            figsize=(11, 4)
+            3,
+            figsize=(15, 4)
         )
+
+        self.fig.subplots_adjust(wspace=0.45)
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -199,6 +202,47 @@ class App:
         self.root.after(30, self.update_loop)
 
     def draw_plots(self):
+        # Визуализация движения
+        self.motion_ax.clear()
+
+        self.motion_ax.set_title("Motion visualization")
+        self.motion_ax.set_xlabel("x, m")
+        self.motion_ax.set_ylabel("y, m", rotation=0, labelpad=20)
+
+        # Временная парабола-желоб
+        x_values = np.linspace(-3, 3, 300)
+        y_values = 0.3 * x_values ** 2
+
+        self.motion_ax.plot(x_values, y_values, label="Parabolic track")
+
+        # Временное положение шарика
+        if len(self.t_values) > 0:
+            t = self.t_values[-1]
+            x_ball = 2 * math.sin(t)
+            y_ball = 0.3 * x_ball ** 2
+        else:
+            x_ball = 0
+            y_ball = 0
+
+        self.motion_ax.scatter(x_ball, y_ball, s=80, label="Ball")
+
+        # Вектор силы тяжести
+        self.motion_ax.arrow(
+            x_ball,
+            y_ball,
+            0,
+            -0.5,
+            head_width=0.12,
+            head_length=0.12,
+            length_includes_head=True
+        )
+
+        self.motion_ax.set_xlim(-3.5, 3.5)
+        self.motion_ax.set_ylim(-1, 3.5)
+        self.motion_ax.grid(True)
+        self.motion_ax.legend()
+
+
         self.line_ek.set_data(self.t_values, self.ek_values)
         self.line_ep.set_data(self.t_values, self.ep_values)
 
