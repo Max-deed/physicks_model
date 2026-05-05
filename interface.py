@@ -22,9 +22,6 @@ class Model:
         self.t += self.dt
 
     def get_state(self):
-        # Временная имитация движения/энергий
-        # Потом это заменится на данные от физической модели
-
         damping = math.exp(-self.mu * self.t)
 
         Ek = self.E_initial * abs(math.sin(self.t)) * damping
@@ -32,7 +29,6 @@ class Model:
 
         A_kinetic = Ek
         A_friction = self.E_initial * (1 - damping)
-
         A_useful = self.E_initial - A_friction - A_kinetic
 
         if A_useful < 0:
@@ -53,9 +49,11 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Physics Model Interface")
+        self.root.geometry("1300x650")
 
         self.model = Model()
         self.running = False
+        self.was_started = False
 
         self.t_values = []
         self.ek_values = []
@@ -68,10 +66,14 @@ class App:
         }
 
         self.create_widgets()
+        self.draw_plots()
         self.update_loop()
 
     def create_widgets(self):
-        control_frame = ttk.Frame(self.root)
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        control_frame = ttk.Frame(main_frame)
         control_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
 
         ttk.Label(control_frame, text="Mass m, kg:").pack(side=tk.LEFT, padx=5)
@@ -89,39 +91,29 @@ class App:
         self.mu_entry.insert(0, "0.1")
         self.mu_entry.pack(side=tk.LEFT, padx=5)
 
-        self.start_button = ttk.Button(
-            control_frame,
-            text="Start",
-            command=self.start
-        )
+        self.start_button = ttk.Button(control_frame, text="Start", command=self.start)
         self.start_button.pack(side=tk.LEFT, padx=5)
 
-        self.stop_button = ttk.Button(
-            control_frame,
-            text="Stop",
-            command=self.pause
-        )
+        self.stop_button = ttk.Button(control_frame, text="Stop", command=self.pause)
         self.stop_button.pack(side=tk.LEFT, padx=5)
 
-        self.reset_button = ttk.Button(
-            control_frame,
-            text="Reset",
-            command=self.reset
-        )
+        self.reset_button = ttk.Button(control_frame, text="Reset", command=self.reset)
         self.reset_button.pack(side=tk.LEFT, padx=5)
 
+        self.info_label = ttk.Label(
+            main_frame,
+            text="t = 0.00 s | Ek = 0.00 J | Ep = 0.00 J | Useful = 0.00 J | Friction = 0.00 J | Kinetic work = 0.00 J"
+        )
+        self.info_label.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+
         self.fig, (self.motion_ax, self.energy_ax, self.work_ax) = plt.subplots(
-            1,
-            3,
-            figsize=(15, 4)
+            1, 3, figsize=(15, 5)
         )
 
         self.fig.subplots_adjust(wspace=0.45)
 
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=main_frame)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-        self.line_ek, = self.energy_ax.plot([], [], label="Kinetic energy")
-        self.line_ep, = self.energy_ax.plot([], [], label="Potential energy")
 
     def read_params(self):
         try:
@@ -131,10 +123,8 @@ class App:
 
             if m <= 0:
                 raise ValueError("Mass must be greater than 0")
-
             if h0 <= 0:
                 raise ValueError("Height must be greater than 0")
-
             if mu < 0:
                 raise ValueError("Friction coefficient must be >= 0")
 
@@ -150,9 +140,10 @@ class App:
         if params is None:
             return
 
-        if len(self.t_values) == 0:
+        if not self.was_started:
             m, h0, mu = params
             self.model = Model(m, h0, mu)
+            self.was_started = True
 
         self.running = True
 
@@ -161,6 +152,7 @@ class App:
 
     def reset(self):
         self.running = False
+        self.was_started = False
 
         params = self.read_params()
 
@@ -180,6 +172,10 @@ class App:
             "A_kinetic": 0
         }
 
+        self.info_label.config(
+            text="t = 0.00 s | Ek = 0.00 J | Ep = 0.00 J | Useful = 0.00 J | Friction = 0.00 J | Kinetic work = 0.00 J"
+        )
+
         self.draw_plots()
 
     def update_loop(self):
@@ -197,81 +193,139 @@ class App:
                 "A_kinetic": state["A_kinetic"]
             }
 
+            self.info_label.config(
+                text=(
+                    f"t = {state['t']:.2f} s | "
+                    f"Ek = {state['Ek']:.2f} J | "
+                    f"Ep = {state['Ep']:.2f} J | "
+                    f"Useful = {state['A_useful']:.2f} J | "
+                    f"Friction = {state['A_friction']:.2f} J | "
+                    f"Kinetic work = {state['A_kinetic']:.2f} J"
+                )
+            )
+
             self.draw_plots()
 
         self.root.after(30, self.update_loop)
 
-    def draw_plots(self):
-        # Визуализация движения
+    def draw_motion_visualization(self):
         self.motion_ax.clear()
+
+        a = 0.3
+        h0 = self.model.h0
+        mu = self.model.mu
+
+        # Стартовая координата из условия y = a*x^2 => x = sqrt(h0/a)
+        x_start = math.sqrt(h0 / a)
+
+        # Делаем запас по x, чтобы шарик не упирался в край
+        x_limit = x_start * 1.15
+
+        # Минимальный размер графика, чтобы при маленьких h0 всё не сжималось
+        x_limit = max(x_limit, 2.0)
+
+        # Парабола строится под текущую высоту h0
+        x_values = np.linspace(-x_limit, x_limit, 500)
+        y_values = a * x_values ** 2
+
+        self.motion_ax.plot(x_values, y_values, label="Parabolic track")
+
+        # Шарик стартует на высоте h0
+        if len(self.t_values) > 0:
+            t = self.t_values[-1]
+
+            damping = math.exp(-mu * self.model.t)
+
+            x_ball = x_start * math.cos(t) * damping
+            y_ball = a * x_ball ** 2
+        else:
+            x_ball = x_start
+            y_ball = h0
+
+        self.motion_ax.scatter(x_ball, y_ball, s=90, label="Ball")
+
+        # Стрелка силы тяжести масштабируется от высоты
+        arrow_length = max(h0 * 0.12, 0.4)
+
+        self.motion_ax.arrow(
+            x_ball,
+            y_ball,
+            0,
+            -arrow_length,
+            head_width=x_limit * 0.035,
+            head_length=arrow_length * 0.25,
+            length_includes_head=True
+        )
+
+        y_limit = max(h0 * 1.2, 2.0)
 
         self.motion_ax.set_title("Motion visualization")
         self.motion_ax.set_xlabel("x, m")
         self.motion_ax.set_ylabel("y, m", rotation=0, labelpad=20)
 
-        # Временная парабола-желоб
-        x_values = np.linspace(-3, 3, 300)
-        y_values = 0.3 * x_values ** 2
+        self.motion_ax.set_xlim(-x_limit, x_limit)
+        self.motion_ax.set_ylim(-y_limit * 0.08, y_limit)
 
-        self.motion_ax.plot(x_values, y_values, label="Parabolic track")
-
-        # Временное положение шарика
-        if len(self.t_values) > 0:
-            t = self.t_values[-1]
-            x_ball = 2 * math.sin(t)
-            y_ball = 0.3 * x_ball ** 2
-        else:
-            x_ball = 0
-            y_ball = 0
-
-        self.motion_ax.scatter(x_ball, y_ball, s=80, label="Ball")
-
-        # Вектор силы тяжести
-        self.motion_ax.arrow(
-            x_ball,
-            y_ball,
-            0,
-            -0.5,
-            head_width=0.12,
-            head_length=0.12,
-            length_includes_head=True
-        )
-
-        self.motion_ax.set_xlim(-3.5, 3.5)
-        self.motion_ax.set_ylim(-1, 3.5)
         self.motion_ax.grid(True)
         self.motion_ax.legend()
 
+    def draw_energy_plot(self):
+        self.energy_ax.clear()
 
-        self.line_ek.set_data(self.t_values, self.ek_values)
-        self.line_ep.set_data(self.t_values, self.ep_values)
+        self.energy_ax.plot(
+            self.t_values,
+            self.ek_values,
+            label="Kinetic energy"
+        )
 
-        self.energy_ax.relim()
-        self.energy_ax.autoscale_view()
+        self.energy_ax.plot(
+            self.t_values,
+            self.ep_values,
+            label="Potential energy"
+        )
 
         self.energy_ax.set_title("Energy over time")
         self.energy_ax.set_xlabel("t, s")
-        self.energy_ax.set_ylabel("E, J", rotation=0, labelpad=30)
+        self.energy_ax.set_ylabel("E, J", rotation=0, labelpad=25)
         self.energy_ax.legend()
         self.energy_ax.grid(True)
 
+    def draw_work_distribution(self):
         self.work_ax.clear()
 
         labels = ["Useful", "Friction", "Kinetic"]
+
         values = [
             self.current_work_state["A_useful"],
             self.current_work_state["A_friction"],
             self.current_work_state["A_kinetic"]
         ]
 
-        self.work_ax.bar(labels, values)
+        bars = self.work_ax.bar(labels, values)
+
+        for bar, value in zip(bars, values):
+            self.work_ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                f"{value:.2f}",
+                ha="center",
+                va="bottom",
+                fontsize=9
+            )
+
+        max_value = max(values) if max(values) > 0 else self.model.E_initial
+        self.work_ax.set_ylim(0, max_value * 1.25)
 
         self.work_ax.set_title("Work distribution")
-        self.work_ax.set_ylabel("A, J", rotation=0, labelpad=30)
+        self.work_ax.set_ylabel("A, J", rotation=0, labelpad=25)
         self.work_ax.grid(True, axis="y")
 
-        self.fig.subplots_adjust(wspace=0.4)
+    def draw_plots(self):
+        self.draw_motion_visualization()
+        self.draw_energy_plot()
+        self.draw_work_distribution()
 
+        self.fig.subplots_adjust(wspace=0.45)
         self.canvas.draw()
 
 
