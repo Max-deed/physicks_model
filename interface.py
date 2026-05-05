@@ -1,8 +1,28 @@
 import tkinter as tk
 from tkinter import ttk
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import math
+
+class Model:
+    def __init__(self):
+        self.t = 0
+        self.dt = 0.05
+
+    def step(self):
+        self.t += self.dt
+
+    def get_state(self):
+        # Временная имитация энергий
+        Ek = 5 * abs(math.sin(self.t))
+        Ep = 5 * abs(math.cos(self.t))
+
+        return {
+            "t": self.t,
+            "Ek": Ek,
+            "Ep": Ep
+        }
 
 class App:
     def __init__(self, root):
@@ -16,7 +36,7 @@ class App:
         self.ek_values = []
         self.ep_values = []
 
-        self.create_widgets()
+        self.creat_widgets()
         self.update_loop()
 
     def creat_widgets(self):
@@ -95,6 +115,14 @@ class App:
             label="Potential energy"
         )
 
-        self.ax.set_title("Energy grathicks")
-        self.ax.xlabel("t")
-        self.ax.ylabel("E")
+        self.ax.set_title("Energy graphics")
+        self.ax.set_xlabel("t, s")
+        self.ax.set_ylabel("E, J")
+        self.ax.legend()
+        self.ax.grid(True)
+
+        self.canvas.draw()
+
+root = tk.Tk()
+app = App(root)
+root.mainloop()
