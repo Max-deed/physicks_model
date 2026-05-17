@@ -7,7 +7,7 @@ class Model:
         self.mu = mu
 
         self.g = 9.81
-        self.dt = 0.3
+        self.dt = 0.1
         self.a = 0.3  #коэффициент параболы
         self.x0 = math.sqrt(h0 / self.a)
 
